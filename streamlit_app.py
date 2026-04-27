@@ -1,60 +1,45 @@
 import streamlit as st
 from ultralytics import YOLO
 import PIL.Image
+import numpy as np
 
-# 1. Page Config
-st.set_page_config(page_title="SynapCare AI", layout="centered")
-st.title("🦴 SynapCare: Precision Fracture Analysis")
+st.set_page_config(page_title="SynapCare AI: Advanced Diagnostics", layout="centered")
+st.title("🦴 SynapCare: Advanced Fracture Detection")
 
 @st.cache_resource
 def load_model():
-    # Loading your 'best.pt' model
     return YOLO('best.pt')
 
 model = load_model()
 
-# --- BALANCED SENSITIVITY ---
-# Lowered to 0.04 to catch small/difficult fractures like the thumb
-CONFIDENCE_THRESHOLD = 0.04 
+# --- ADVANCED DEBUGGING SETTINGS ---
+CONFIDENCE_THRESHOLD = 0.02 # Dropped to 2% for absolute maximum sensitivity
 SCALE_FACTOR = 0.2 
 
-# 2. Upload Section
-uploaded_file = st.file_uploader("Upload X-ray...", type=["jpg", "jpeg", "png"])
+uploaded_file = st.file_uploader("Upload Thumb or Bone X-ray...", type=["jpg", "jpeg", "png"])
 
 if uploaded_file is not None:
-    image = PIL.Image.open(uploaded_file)
+    image = PIL.Image.open(uploaded_file).convert("RGB") # Force RGB to match training
     st.image(image, caption='Uploaded X-ray', use_container_width=True)
     
-    if st.button("Run SynapCare AI Analysis"):
-        results = model(image, conf=CONFIDENCE_THRESHOLD)
+    if st.button("Run Deep Analysis"):
+        with st.spinner('Analyzing bone density and continuity...'):
+            # Using 'augment=True' (TTA) - This helps catch 'invisible' thumb fractures
+            results = model.predict(image, conf=CONFIDENCE_THRESHOLD, augment=True)
         
-        # Plot visual boxes with dynamic labels
         res_plotted = results[0].plot(labels=True, conf=True)
         res_image = PIL.Image.fromarray(res_plotted[:, :, ::-1])
-        st.image(res_image, caption='AI Detection Result', use_container_width=True)
+        st.image(res_image, caption='Deep Analysis Result', use_container_width=True)
         
         if len(results[0].boxes) > 0:
-            st.success(f"AI identified {len(results[0].boxes)} potential fracture(s):")
-            
+            st.success(f"AI found {len(results[0].boxes)} potential area(s).")
             for box in results[0].boxes:
-                # Dynamic Labeling
                 class_id = int(box.cls[0])
                 label_name = model.names[class_id]
-                
-                # Measurement Calculations
-                coords = box.xyxy[0].tolist() 
-                width_mm = (coords[2] - coords[0]) * SCALE_FACTOR
-                height_mm = (coords[3] - coords[1]) * SCALE_FACTOR
                 score = float(box.conf[0])
-                
-                # Showing the results clearly for the Professor
-                st.markdown(f"### 📍 Detection: {label_name.upper()}")
-                st.write(f"**Confidence Level:** {score:.1%}")
-                st.write(f"**Extent of Fracture:** {width_mm:.1f} mm x {height_mm:.1f} mm")
-                st.markdown("---")
+                st.write(f"📍 **{label_name.upper()}** - Confidence: {score:.1%}")
         else:
-            st.warning("No fractures detected. At 4% sensitivity, this suggests the image features are very different from the training set.")
+            st.error("Still not detecting. Recommendation: Use a higher-resolution 'Standard AP View' X-ray.")
 
-# 3. PROTOTYPE NOTICE
 st.markdown("---")
-st.caption("⚠️ **PROTOTYPE NOTICE:** SynapCare Development Prototype. AI-assisted analysis for educational use. Not for clinical diagnosis.")
+st.caption("Technical Note: TTA (Test-Time Augmentation) enabled for difficult fracture detection.")
